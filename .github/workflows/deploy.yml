@@ -1,0 +1,143 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment name
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Terraform Apply And App Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_IN_AUTOMATION: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set Up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Generate Terraform Variables File
+        working-directory: sentiment-analysis-infrastructure
+        run: |
+          cat > terraform.tfvars <<EOF
+          environment  = "${{ inputs.environment }}"
+          aws_region   = "${{ secrets.AWS_REGION }}"
+          alert_email  = "${{ secrets.ALERT_EMAIL }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: sentiment-analysis-infrastructure
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        working-directory: sentiment-analysis-infrastructure
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: sentiment-analysis-infrastructure
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Build Deployment Config From Terraform Outputs
+        run: python update_config.py
+
+      - name: Package Lambda Code And Deploy App
+        run: python deploy_all.py
+
+      - name: Post-Deploy Smoke Test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API_URL="$(terraform -chdir=sentiment-analysis-infrastructure output -raw api_endpoint)"
+          echo "Running smoke tests against: ${API_URL}"
+
+          analyze_code="$(curl -sS -o /tmp/analyze_response.json -w '%{http_code}' \
+            -X POST "${API_URL}/analyze" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"CI smoke test: this service looks great","user_id":"ci-smoke"}')"
+
+          if [ "${analyze_code}" != "200" ]; then
+            echo "Smoke test failed: /analyze returned HTTP ${analyze_code}"
+            cat /tmp/analyze_response.json
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+
+          with open('/tmp/analyze_response.json', 'r', encoding='utf-8') as f:
+              body = json.load(f)
+
+          if 'sentiment' not in body:
+              raise SystemExit('Smoke test failed: /analyze response missing sentiment')
+          PY
+
+          submit_payload='{"input_mode":"inline","texts":["first smoke row","second smoke row"],"user_id":"ci-smoke"}'
+
+          jobs_code="$(curl -sS -o /tmp/jobs_response.json -w '%{http_code}' \
+            -X POST "${API_URL}/jobs" \
+            -H 'Content-Type: application/json' \
+            -d "${submit_payload}")"
+
+          submit_endpoint="/jobs"
+          submit_code="${jobs_code}"
+
+          if [ "${jobs_code}" = "404" ] || [ "${jobs_code}" = "403" ]; then
+            batch_code="$(curl -sS -o /tmp/jobs_response.json -w '%{http_code}' \
+              -X POST "${API_URL}/batch" \
+              -H 'Content-Type: application/json' \
+              -d '{"texts":["first smoke row","second smoke row"],"user_id":"ci-smoke","batch_id":"ci-smoke-batch"}')"
+            submit_endpoint="/batch"
+            submit_code="${batch_code}"
+          fi
+
+          if [ "${submit_code}" != "200" ] && [ "${submit_code}" != "202" ]; then
+            echo "Smoke test failed: ${submit_endpoint} returned HTTP ${submit_code}"
+            cat /tmp/jobs_response.json
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+
+          with open('/tmp/jobs_response.json', 'r', encoding='utf-8') as f:
+              body = json.load(f)
+
+          has_job_signal = any(k in body for k in ('job_id', 'batch_id', 'status'))
+          if not has_job_signal:
+              raise SystemExit('Smoke test failed: submission response missing job fields')
+          PY
+
+          echo "Smoke tests passed: /analyze and job submission endpoint are healthy."

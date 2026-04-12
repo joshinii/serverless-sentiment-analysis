@@ -11,6 +11,16 @@ aws_region = "us-west-2"
 # Alert Email - Change this to your email!
 alert_email = "your-email@example.com"
 
+# API Gateway throttling (stage-level)
+api_throttle_rate_limit  = 25
+api_throttle_burst_limit = 50
+
+# Optional API key and usage plan
+# enable_api_key = true
+# api_key_throttle_rate_limit  = 10
+# api_key_throttle_burst_limit = 20
+# api_key_quota_limit          = 100000
+
 # Optional: Custom tags
 tags = {
   Project     = "SentimentAnalysis"

@@ -18,10 +18,11 @@ resource "aws_api_gateway_resource" "analyze" {
 }
 
 resource "aws_api_gateway_method" "analyze_post" {
-  rest_api_id   = aws_api_gateway_rest_api.main.id
-  resource_id   = aws_api_gateway_resource.analyze.id
-  http_method   = "POST"
-  authorization = "NONE"
+  rest_api_id      = aws_api_gateway_rest_api.main.id
+  resource_id      = aws_api_gateway_resource.analyze.id
+  http_method      = "POST"
+  authorization    = "NONE"
+  api_key_required = var.enable_api_key
 }
 
 resource "aws_api_gateway_integration" "analyze_lambda" {
@@ -41,10 +42,11 @@ resource "aws_api_gateway_resource" "batch" {
 }
 
 resource "aws_api_gateway_method" "batch_post" {
-  rest_api_id   = aws_api_gateway_rest_api.main.id
-  resource_id   = aws_api_gateway_resource.batch.id
-  http_method   = "POST"
-  authorization = "NONE"
+  rest_api_id      = aws_api_gateway_rest_api.main.id
+  resource_id      = aws_api_gateway_resource.batch.id
+  http_method      = "POST"
+  authorization    = "NONE"
+  api_key_required = var.enable_api_key
 }
 
 resource "aws_api_gateway_integration" "batch_lambda" {
@@ -64,10 +66,11 @@ resource "aws_api_gateway_resource" "history" {
 }
 
 resource "aws_api_gateway_method" "history_get" {
-  rest_api_id   = aws_api_gateway_rest_api.main.id
-  resource_id   = aws_api_gateway_resource.history.id
-  http_method   = "GET"
-  authorization = "NONE"
+  rest_api_id      = aws_api_gateway_rest_api.main.id
+  resource_id      = aws_api_gateway_resource.history.id
+  http_method      = "GET"
+  authorization    = "NONE"
+  api_key_required = var.enable_api_key
 }
 
 resource "aws_api_gateway_integration" "history_lambda" {
@@ -218,6 +221,32 @@ resource "aws_api_gateway_integration_response" "history_options" {
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
 
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.analyze.id,
+      aws_api_gateway_resource.batch.id,
+      aws_api_gateway_resource.history.id,
+      aws_api_gateway_method.analyze_post.id,
+      aws_api_gateway_method.batch_post.id,
+      aws_api_gateway_method.history_get.id,
+      aws_api_gateway_method.analyze_options.id,
+      aws_api_gateway_method.batch_options.id,
+      aws_api_gateway_method.history_options.id,
+      aws_api_gateway_integration.analyze_lambda.id,
+      aws_api_gateway_integration.batch_lambda.id,
+      aws_api_gateway_integration.history_lambda.id,
+      aws_api_gateway_integration.analyze_options.id,
+      aws_api_gateway_integration.batch_options.id,
+      aws_api_gateway_integration.history_options.id,
+      var.api_throttle_rate_limit,
+      var.api_throttle_burst_limit,
+      var.enable_api_key,
+      var.api_key_throttle_rate_limit,
+      var.api_key_throttle_burst_limit,
+      var.api_key_quota_limit
+    ]))
+  }
+
   depends_on = [
     aws_api_gateway_integration.analyze_lambda,
     aws_api_gateway_integration.batch_lambda,
@@ -238,4 +267,53 @@ resource "aws_api_gateway_stage" "main" {
   stage_name    = var.environment
 
   tags = local.common_tags
+}
+
+resource "aws_api_gateway_method_settings" "throttling" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  stage_name  = aws_api_gateway_stage.main.stage_name
+  method_path = "*/*"
+
+  settings {
+    throttling_rate_limit  = var.api_throttle_rate_limit
+    throttling_burst_limit = var.api_throttle_burst_limit
+  }
+}
+
+resource "aws_api_gateway_usage_plan" "main" {
+  count = var.enable_api_key ? 1 : 0
+  name  = "${local.name_prefix}-usage-plan"
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.main.id
+    stage  = aws_api_gateway_stage.main.stage_name
+  }
+
+  throttle_settings {
+    rate_limit  = var.api_key_throttle_rate_limit
+    burst_limit = var.api_key_throttle_burst_limit
+  }
+
+  quota_settings {
+    limit  = var.api_key_quota_limit
+    period = "MONTH"
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_api_gateway_api_key" "main" {
+  count       = var.enable_api_key ? 1 : 0
+  name        = "${local.name_prefix}-api-key"
+  enabled     = true
+  description = "API key for sentiment API clients"
+
+  tags = local.common_tags
+}
+
+resource "aws_api_gateway_usage_plan_key" "main" {
+  count         = var.enable_api_key ? 1 : 0
+  key_id        = aws_api_gateway_api_key.main[0].id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.main[0].id
 }

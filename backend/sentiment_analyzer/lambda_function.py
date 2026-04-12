@@ -1,34 +1,21 @@
 """
 Sentiment Analysis Lambda Function
-Analyzes text sentiment using pre-trained DistilBERT model from HuggingFace
+Analyzes text sentiment using shared model loader utilities.
 """
 
 import json
 import os
 import boto3
-import logging
 from datetime import datetime
 from typing import Dict, Any
 from decimal import Decimal
 
-import json
-import logging
-import os
-import time
-from decimal import Decimal
-import onnxruntime as ort
-from tokenizers import Tokenizer
-import numpy as np
+from backend.shared import config
+from backend.shared.logger import get_logger, log_event, request_id_from_context, timer_start, latency_ms
+from backend.shared.model_loader import analyze_text
 
-# Configure logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
-# Global variables for caching
-model = None
-tokenizer = None
-MODEL_PATH = os.environ.get('MODEL_PATH', '/tmp/model_assets')
-MODEL_BUCKET = os.environ.get('MODEL_BUCKET')
 try:
     s3_client = boto3.client('s3')
     dynamodb = boto3.resource('dynamodb')
@@ -61,112 +48,9 @@ def get_secret():
 API_SECRETS = get_secret()
 
 
-def softmax(x):
-    """Compute softmax values for each sets of scores in x."""
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=0)
-
-def download_model_from_s3():
-    """Download model assets from S3 to /tmp"""
-    if not os.path.exists(MODEL_PATH):
-        os.makedirs(MODEL_PATH)
-    
-    logger.info(f"Downloading model from s3://{MODEL_BUCKET}/model_assets ...")
-    
-    try:
-        if not MODEL_BUCKET:
-            logger.warning("MODEL_BUCKET not set. Assuming local model.")
-            return
-
-        objects = s3_client.list_objects_v2(Bucket=MODEL_BUCKET, Prefix="model_assets/")
-        if 'Contents' not in objects:
-            logger.error("No model assets found in S3")
-            return # Don't raise, might be local test or preloaded
-
-        for obj in objects['Contents']:
-            key = obj['Key']
-            rel_path = os.path.relpath(key, "model_assets")
-            if rel_path == ".": continue
-            local_file = os.path.join(MODEL_PATH, rel_path)
-            local_dir = os.path.dirname(local_file)
-            if not os.path.exists(local_dir):
-                os.makedirs(local_dir)
-            
-            logger.info(f"Downloading {key} to {local_file}")
-            s3_client.download_file(MODEL_BUCKET, key, local_file)
-    except Exception as e:
-        logger.error(f"Failed to download model: {e}")
-        # raise e # Don't crash if optional? But for Lambda it's critical.
-        raise e
-
-def load_model():
-    global model, tokenizer
-    if model is None or tokenizer is None:
-        try:
-            logger.info("Loading ONNX model and tokenizer...")
-            
-            if not os.path.exists(os.path.join(MODEL_PATH, "model.onnx")):
-                download_model_from_s3()
-            
-            # Load Tokenizer from tokenizer.json
-            metrics_path = os.path.join(MODEL_PATH, "tokenizer.json")
-            if not os.path.exists(metrics_path):
-                 # Fallback/Error? download should have fetched it. 
-                 raise Exception("tokenizer.json not found")
-
-            tokenizer = Tokenizer.from_file(metrics_path)
-            # Enable truncation and padding
-            tokenizer.enable_truncation(max_length=512)
-            tokenizer.enable_padding(length=512)
-
-            # Load ONNX Model
-            model_file = os.path.join(MODEL_PATH, "model.onnx")
-            model = ort.InferenceSession(model_file)
-            
-            logger.info("Model loaded successfully")
-        except Exception as e:
-            logger.error(f"Error loading model: {e}")
-            raise e
-
 def analyze_sentiment(text):
-    """Analyze sentiment using ONNX Runtime and Tokenizers"""
-    global model, tokenizer
-    
-    if model is None or tokenizer is None:
-        load_model()
-    
-    # Tokenize
-    encoded = tokenizer.encode(text)
-    
-    # Prepare inputs for ONNX (DistilBERT expects input_ids and attention_mask)
-    # The names must match the ONNX model input names. Usually 'input_ids', 'attention_mask'.
-    # We can check model.get_inputs() but standard DistilBERT is standard.
-    
-    input_ids = np.array([encoded.ids], dtype=np.int64)
-    attention_mask = np.array([encoded.attention_mask], dtype=np.int64)
-    
-    onnx_inputs = {
-        'input_ids': input_ids,
-        'attention_mask': attention_mask
-    }
-    
-    # Inference
-    outputs = model.run(None, onnx_inputs)
-    logits = outputs[0][0]
-    
-    # Post-process
-    probabilities = softmax(logits)
-    sentiment_idx = np.argmax(probabilities)
-    confidence = float(probabilities[sentiment_idx])
-    
-    labels = ["NEGATIVE", "POSITIVE"]
-    sentiment = labels[sentiment_idx]
-    
-    return {
-        "sentiment": sentiment,
-        "confidence": confidence,
-        "text_preview": text[:100]
-    }
+    """Analyze sentiment using shared model loader."""
+    return analyze_text(text)
 
 
 def save_to_dynamodb(user_id: str, text: str, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -179,7 +63,7 @@ def save_to_dynamodb(user_id: str, text: str, result: Dict[str, Any]) -> Dict[st
         return {"success": True, "message": "Local mode (skipped DB)"}
     
     try:
-        table_name = os.environ.get('DYNAMODB_TABLE')
+        table_name = config.DYNAMODB_TABLE
         if not table_name:
              return {"success": False, "error": "DYNAMODB_TABLE env var missing"}
 
@@ -192,6 +76,7 @@ def save_to_dynamodb(user_id: str, text: str, result: Dict[str, Any]) -> Dict[st
             'text': text,
             'sentiment': result['sentiment'],
             'confidence': Decimal(str(result['confidence'])),
+            'model_version': config.MODEL_VERSION,
             'timestamp': timestamp,
             'created_at': datetime.now().isoformat()
         }
@@ -209,7 +94,18 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
     """
     Lambda function handler for sentiment analysis.
     """
-    logger.info(f"Received event: {json.dumps(event, default=str)}")
+    start_time = timer_start()
+    request_id = request_id_from_context(context)
+    log_event(
+        logger,
+        level="INFO",
+        function_name="sentiment_analyzer",
+        event_type="invocation.start",
+        message="Sentiment analyzer invocation started",
+        request_id=request_id,
+        status="start",
+        latency_ms_value=0,
+    )
     
     try:
         # Parse request body (from API Gateway)
@@ -224,6 +120,16 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         
         # Validate input
         if not text or len(text.strip()) == 0:
+            log_event(
+                logger,
+                level="WARNING",
+                function_name="sentiment_analyzer",
+                event_type="validation.failed",
+                message="Input validation failed: text is required",
+                request_id=request_id,
+                status="failed",
+                latency_ms_value=latency_ms(start_time),
+            )
             return {
                 'statusCode': 400,
                 'headers': {
@@ -236,6 +142,17 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
             }
         
         if len(text) > 5000:
+            log_event(
+                logger,
+                level="WARNING",
+                function_name="sentiment_analyzer",
+                event_type="validation.failed",
+                message="Input validation failed: text too long",
+                request_id=request_id,
+                status="failed",
+                latency_ms_value=latency_ms(start_time),
+                extra={"text_length": len(text)},
+            )
             return {
                 'statusCode': 400,
                 'headers': {
@@ -258,10 +175,26 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
             'user_id': user_id,
             'sentiment': result['sentiment'],
             'confidence': result['confidence'],
+            'model_version': config.MODEL_VERSION,
             'timestamp': int(datetime.now().timestamp()),
             'text_preview': result['text_preview'],
             'db_save_status': db_status # Debug field
         }
+
+        log_event(
+            logger,
+            level="INFO",
+            function_name="sentiment_analyzer",
+            event_type="invocation.completed",
+            message="Sentiment analyzer invocation completed",
+            request_id=request_id,
+            status="success",
+            latency_ms_value=latency_ms(start_time),
+            extra={
+                "sentiment": result.get("sentiment"),
+                "confidence": result.get("confidence"),
+            },
+        )
         
         return {
             'statusCode': 200,
@@ -273,7 +206,20 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         }
         
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        log_event(
+            logger,
+            level="ERROR",
+            function_name="sentiment_analyzer",
+            event_type="invocation.failed",
+            message="Sentiment analyzer invocation failed",
+            request_id=request_id,
+            status="failed",
+            latency_ms_value=latency_ms(start_time),
+            extra={
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            },
+        )
         
         return {
             'statusCode': 500,

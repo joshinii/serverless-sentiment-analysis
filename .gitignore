@@ -73,3 +73,5 @@ tmp/
 !tsconfig.json
 DESIGN.md
 DELIVERABLES_GUIDE.md
+.github/agents/
+.github/prompts/

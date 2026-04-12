@@ -41,31 +41,31 @@ resource "aws_security_group" "lambda_sg" {
 
 # S3 Gateway Endpoint (Free)
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id       = aws_vpc.main.id
-  service_name = "com.amazonaws.${local.region}.s3"
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${local.region}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids = [aws_vpc.main.default_route_table_id]
+  route_table_ids   = [aws_vpc.main.default_route_table_id]
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-s3-endpoint" })
 }
 
 # DynamoDB Gateway Endpoint (Free)
 resource "aws_vpc_endpoint" "dynamodb" {
-  vpc_id       = aws_vpc.main.id
-  service_name = "com.amazonaws.${local.region}.dynamodb"
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${local.region}.dynamodb"
   vpc_endpoint_type = "Gateway"
-  route_table_ids = [aws_vpc.main.default_route_table_id]
+  route_table_ids   = [aws_vpc.main.default_route_table_id]
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-ddb-endpoint" })
 }
 
 # Secrets Manager Interface Endpoint
 resource "aws_vpc_endpoint" "secretsmanager" {
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${local.region}.secretsmanager"
-  vpc_endpoint_type = "Interface"
-  subnet_ids        = [aws_subnet.private.id]
-  security_group_ids = [aws_security_group.lambda_sg.id]
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${local.region}.secretsmanager"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id]
+  security_group_ids  = [aws_security_group.lambda_sg.id]
   private_dns_enabled = true
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-secrets-endpoint" })
@@ -73,11 +73,11 @@ resource "aws_vpc_endpoint" "secretsmanager" {
 
 # CloudWatch Logs Interface Endpoint
 resource "aws_vpc_endpoint" "logs" {
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${local.region}.logs"
-  vpc_endpoint_type = "Interface"
-  subnet_ids        = [aws_subnet.private.id]
-  security_group_ids = [aws_security_group.lambda_sg.id]
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${local.region}.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id]
+  security_group_ids  = [aws_security_group.lambda_sg.id]
   private_dns_enabled = true
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-logs-endpoint" })
@@ -85,12 +85,24 @@ resource "aws_vpc_endpoint" "logs" {
 
 # SNS Interface Endpoint (for Batch Processor)
 resource "aws_vpc_endpoint" "sns" {
-  vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.${local.region}.sns"
-  vpc_endpoint_type = "Interface"
-  subnet_ids        = [aws_subnet.private.id]
-  security_group_ids = [aws_security_group.lambda_sg.id]
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${local.region}.sns"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id]
+  security_group_ids  = [aws_security_group.lambda_sg.id]
   private_dns_enabled = true
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-sns-endpoint" })
+}
+
+# SQS Interface Endpoint (for async batch queue consumption)
+resource "aws_vpc_endpoint" "sqs" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.${local.region}.sqs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private.id]
+  security_group_ids  = [aws_security_group.lambda_sg.id]
+  private_dns_enabled = true
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-sqs-endpoint" })
 }

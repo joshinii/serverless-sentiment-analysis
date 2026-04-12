@@ -1,6 +1,6 @@
 output "api_endpoint" {
   description = "API Gateway endpoint URL"
-  value       = "${aws_api_gateway_stage.main.invoke_url}"
+  value       = aws_api_gateway_stage.main.invoke_url
 }
 
 output "cloudfront_url" {
@@ -49,7 +49,7 @@ output "sns_topic_arn" {
 
 output "deployment_instructions" {
   description = "Next steps after Terraform apply"
-  value = <<-EOT
+  value       = <<-EOT
     Infrastructure deployed successfully!
     
     Next steps:

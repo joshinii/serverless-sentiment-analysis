@@ -2,13 +2,13 @@
 
 # Frontend bucket
 resource "aws_s3_bucket" "frontend" {
-  bucket = "${local.name_prefix}-frontend-${random_string.suffix.result}"
+  bucket        = "${local.name_prefix}-frontend-${random_string.suffix.result}"
   force_destroy = true
-  
+
   tags = merge(
     local.common_tags,
     {
-      Name = "${local.name_prefix}-frontend"
+      Name    = "${local.name_prefix}-frontend"
       Purpose = "Static website hosting"
     }
   )
@@ -64,13 +64,13 @@ resource "aws_s3_bucket_policy" "frontend" {
 
 # Data bucket (for batch processing)
 resource "aws_s3_bucket" "data" {
-  bucket = "${local.name_prefix}-data-${random_string.suffix.result}"
+  bucket        = "${local.name_prefix}-data-${random_string.suffix.result}"
   force_destroy = true
-  
+
   tags = merge(
     local.common_tags,
     {
-      Name = "${local.name_prefix}-data"
+      Name    = "${local.name_prefix}-data"
       Purpose = "Batch file storage"
     }
   )
@@ -91,37 +91,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   rule {
     id     = "delete-old-files"
     status = "Enabled"
-  }
-    
-  # (Correction: Filter and expiration blocks were inside rule)
-    
-  rule {
-    id     = "delete-old-files-rule"
-    status = "Enabled"
     filter {}
     expiration {
       days = 30
     }
   }
 }
-# Wait, I copied the lifecycle rule wrong in my snippet above.
-# Original was:
-#   rule {
-#     id     = "delete-old-files"
-#     status = "Enabled"
-#     filter {}
-#     expiration {
-#       days = 30
-#     }
-#   }
-# I will use the correct block.
 
 # DynamoDB Table
 resource "aws_dynamodb_table" "sentiment_analytics" {
-  name           = "${local.name_prefix}-analytics"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "PK"
-  range_key      = "SK"
+  name         = "${local.name_prefix}-analytics"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "PK"
+  range_key    = "SK"
 
   attribute {
     name = "PK"
@@ -145,6 +127,41 @@ resource "aws_dynamodb_table" "sentiment_analytics" {
     local.common_tags,
     {
       Name = "${local.name_prefix}-analytics"
+    }
+  )
+}
+
+# SQS Queues for async batch processing
+resource "aws_sqs_queue" "batch_jobs_dlq" {
+  name                      = "${local.name_prefix}-batch-jobs-dlq"
+  message_retention_seconds = 1209600
+  sqs_managed_sse_enabled   = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name    = "${local.name_prefix}-batch-jobs-dlq"
+      Purpose = "Dead-letter queue for failed batch jobs"
+    }
+  )
+}
+
+resource "aws_sqs_queue" "batch_jobs" {
+  name                       = "${local.name_prefix}-batch-jobs"
+  visibility_timeout_seconds = var.batch_queue_visibility_timeout_seconds
+  message_retention_seconds  = var.batch_queue_message_retention_seconds
+  sqs_managed_sse_enabled    = true
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.batch_jobs_dlq.arn
+    maxReceiveCount     = var.batch_queue_max_receive_count
+  })
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name    = "${local.name_prefix}-batch-jobs"
+      Purpose = "Async batch job queue"
     }
   )
 }

@@ -6,16 +6,16 @@ Processes CSV files containing multiple text samples for sentiment analysis
 import json
 import os
 import boto3
-import logging
 import csv
 from io import StringIO
 from datetime import datetime
 from typing import Dict, Any, List
 from decimal import Decimal
 
+from backend.shared.logger import get_logger, log_event, request_id_from_context, timer_start, latency_ms
+
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
+logger = get_logger(__name__)
 
 # AWS clients
 try:
@@ -320,7 +320,18 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         "body": "{\"bucket\": \"...\", \"key\": \"...\", \"batch_id\": \"...\"}"
     }
     """
-    logger.info(f"Received batch processing request: {json.dumps(event, default=str)}")
+    start_time = timer_start()
+    request_id = request_id_from_context(context)
+    log_event(
+        logger,
+        level="INFO",
+        function_name="batch_handler",
+        event_type="invocation.start",
+        message="Batch handler invocation started",
+        request_id=request_id,
+        status="start",
+        latency_ms_value=0,
+    )
     
     try:
         # Parse request
@@ -349,12 +360,34 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
             logger.info(f"Processing batch {batch_id} from s3://{bucket}/{key}")
             rows = process_csv_file(bucket, key)
         else:
+            log_event(
+                logger,
+                level="WARNING",
+                function_name="batch_handler",
+                event_type="validation.failed",
+                message="Batch request missing texts and key",
+                request_id=request_id,
+                job_id=batch_id,
+                status="failed",
+                latency_ms_value=latency_ms(start_time),
+            )
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'Either "texts" array or S3 "key" is required'})
             }
         
         if not rows:
+            log_event(
+                logger,
+                level="WARNING",
+                function_name="batch_handler",
+                event_type="validation.failed",
+                message="No valid rows found to process",
+                request_id=request_id,
+                job_id=batch_id,
+                status="failed",
+                latency_ms_value=latency_ms(start_time),
+            )
             return {
                 'statusCode': 400,
                 'body': json.dumps({'error': 'No valid rows found to process'})
@@ -393,6 +426,22 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         send_completion_notification(batch_id, success_count, failed_count)
         
         # Return response
+        log_event(
+            logger,
+            level="INFO",
+            function_name="batch_handler",
+            event_type="invocation.completed",
+            message="Batch handler invocation completed",
+            request_id=request_id,
+            job_id=batch_id,
+            status="success",
+            latency_ms_value=latency_ms(start_time),
+            extra={
+                "total_rows": len(results),
+                "success_count": success_count,
+                "failed_count": failed_count,
+            },
+        )
         return {
             'statusCode': 200,
             'headers': {
@@ -410,7 +459,20 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         }
         
     except Exception as e:
-        logger.error(f"Batch processing error: {str(e)}", exc_info=True)
+        log_event(
+            logger,
+            level="ERROR",
+            function_name="batch_handler",
+            event_type="invocation.failed",
+            message="Batch handler invocation failed",
+            request_id=request_id,
+            status="failed",
+            latency_ms_value=latency_ms(start_time),
+            extra={
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            },
+        )
         
         return {
             'statusCode': 500,

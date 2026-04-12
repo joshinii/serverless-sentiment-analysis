@@ -6,14 +6,14 @@ Retrieves user's sentiment analysis history from DynamoDB
 import json
 import os
 import boto3
-import logging
 from typing import Dict, Any, List
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 
+from backend.shared.logger import get_logger, log_event, request_id_from_context, timer_start, latency_ms
+
 # Configure logging
-logger = logging.getLogger()
-logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
+logger = get_logger(__name__)
 
 # AWS clients
 try:
@@ -223,7 +223,18 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         }
     }
     """
-    logger.info(f"Received history request: {json.dumps(event, default=str)}")
+    start_time = timer_start()
+    request_id = request_id_from_context(context)
+    log_event(
+        logger,
+        level="INFO",
+        function_name="history_handler",
+        event_type="invocation.start",
+        message="History handler invocation started",
+        request_id=request_id,
+        status="start",
+        latency_ms_value=0,
+    )
     
     try:
         # Parse query parameters
@@ -243,6 +254,18 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         if batch_id:
             # Retrieve batch results
             results = get_batch_results(batch_id)
+            log_event(
+                logger,
+                level="INFO",
+                function_name="history_handler",
+                event_type="invocation.completed",
+                message="History handler invocation completed",
+                request_id=request_id,
+                job_id=batch_id,
+                status="success",
+                latency_ms_value=latency_ms(start_time),
+                extra={"lookup_type": "batch"},
+            )
             
             return {
                 'statusCode': 200,
@@ -256,6 +279,17 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         elif user_id:
             # Retrieve user history
             history = get_user_history(user_id, limit)
+            log_event(
+                logger,
+                level="INFO",
+                function_name="history_handler",
+                event_type="invocation.completed",
+                message="History handler invocation completed",
+                request_id=request_id,
+                status="success",
+                latency_ms_value=latency_ms(start_time),
+                extra={"lookup_type": "user", "user_id": user_id, "limit": limit, "count": len(history)},
+            )
             
             return {
                 'statusCode': 200,
@@ -271,6 +305,16 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
             }
             
         else:
+            log_event(
+                logger,
+                level="WARNING",
+                function_name="history_handler",
+                event_type="validation.failed",
+                message="Either user_id or batch_id is required",
+                request_id=request_id,
+                status="failed",
+                latency_ms_value=latency_ms(start_time),
+            )
             return {
                 'statusCode': 400,
                 'headers': {
@@ -281,9 +325,22 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
                     'error': 'Either user_id or batch_id parameter is required'
                 })
             }
-        
+
     except Exception as e:
-        logger.error(f"History retrieval error: {str(e)}", exc_info=True)
+        log_event(
+            logger,
+            level="ERROR",
+            function_name="history_handler",
+            event_type="invocation.failed",
+            message="History retrieval failed",
+            request_id=request_id,
+            status="failed",
+            latency_ms_value=latency_ms(start_time),
+            extra={
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            },
+        )
         
         return {
             'statusCode': 500,
