@@ -1,0 +1,19 @@
+install:
+	pip install -r requirements.txt
+
+run:
+	python local_server.py
+
+terraform-init:
+	cd infra && terraform init
+
+terraform-apply:
+	cd infra && terraform apply -auto-approve
+
+deploy:
+	# if you have script or CI trigger
+
+test-api:
+	curl -X POST $(API_URL)/analyze \
+	-H "Content-Type: application/json" \
+	-d '{"text": "This is great"}'

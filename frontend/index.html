@@ -5,591 +5,281 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sentiment Analysis Platform</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 900px;
-            width: 100%;
-            margin: 0 auto;
-            padding: 40px;
-        }
-
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 2.5em;
-            text-align: center;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 1.1em;
-        }
-
-        /* Tab Navigation */
-        .tab-nav {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 15px;
-            border: none;
-            background: transparent;
-            color: #666;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            border-bottom: 3px solid transparent;
-        }
-
-        .tab-btn:hover {
-            color: #667eea;
-        }
-
-        .tab-btn.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
-        }
-
-        /* Tab Content */
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-            animation: fadeIn 0.3s;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Mode Selector */
-        .mode-selector {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .mode-btn {
-            padding: 10px 20px;
-            border: 2px solid #667eea;
-            background: white;
-            color: #667eea;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 0.9em;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .mode-btn.active {
-            background: #667eea;
-            color: white;
-        }
-
-        .mode-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
-        }
-
-        /* Form Elements */
-        .input-section {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 10px;
-            color: #333;
-            font-weight: 600;
-            font-size: 1.1em;
-        }
-
-        textarea,
-        input[type="text"],
-        input[type="file"] {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 1em;
-            font-family: inherit;
-            transition: border-color 0.3s;
-        }
-
-        textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-
-        input[type="text"]:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        input[type="file"] {
-            padding: 10px;
-        }
-
-        /* Buttons */
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        button {
-            padding: 15px 30px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .primary-btn {
-            flex: 1;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .primary-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-        }
-
-        .primary-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .secondary-btn {
-            background: #f0f0f0;
-            color: #666;
-        }
-
-        .secondary-btn:hover {
-            background: #e0e0e0;
-        }
-
-        /* Results */
-        .result-card {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 25px;
-            margin-top: 20px;
-            display: none;
-            animation: slideIn 0.5s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .result-card.show {
-            display: block;
-        }
-
-        .result-card.positive {
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            border: 2px solid #28a745;
-        }
-
-        .result-card.negative {
-            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-            border: 2px solid #dc3545;
-        }
-
-        .result-card.neutral {
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
-            border: 2px solid #ffc107;
-        }
-
-        .result-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .emoji {
-            font-size: 3em;
-        }
-
-        .sentiment-text {
-            font-size: 2em;
-            font-weight: 700;
-        }
-
-        /* History Table */
-        .history-table {
-            width: 100%;
-            margin-top: 20px;
-            border-collapse: collapse;
-        }
-
-        .history-table th,
-        .history-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .history-table th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .history-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .sentiment-badge {
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 0.85em;
-            font-weight: 600;
-        }
-
-        .sentiment-badge.positive {
-            background: #d4edda;
-            color: #28a745;
-        }
-
-        .sentiment-badge.negative {
-            background: #f8d7da;
-            color: #dc3545;
-        }
-
-        /* Loading */
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #667eea;
-            font-size: 1.2em;
-            display: none;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* Error Card */
-        .error-card {
-            background: #f8d7da;
-            border: 2px solid #dc3545;
-            border-radius: 15px;
-            padding: 20px;
-            margin-top: 20px;
-            display: none;
-            color: #721c24;
-        }
-
-        .error-card.show {
-            display: block;
-            animation: slideIn 0.5s ease;
-        }
-
-        /* Info Box */
-        .info-box {
-            background: #e7f3ff;
-            border: 1px solid #b3d9ff;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            color: #004085;
-        }
-
-        .help-text {
-            font-size: 0.85em;
-            color: #666;
-            margin-top: 5px;
-        }
-
-        /* Progress Bar */
-        .progress-bar {
-            height: 30px;
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 15px;
-            overflow: hidden;
-            position: relative;
-            margin-top: 10px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 1s ease;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-right: 10px;
-            color: white;
-            font-weight: 700;
-        }
-    </style>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./config.js"></script>
 </head>
 
 <body>
-    <div class="container">
-        <h1>🎭 Sentiment Analysis Platform</h1>
-        <p class="subtitle">Analyze sentiment with AI - Real-time, Batch, or History</p>
-
-        <!-- Mode Selector -->
-        <div class="mode-selector">
-            <button class="mode-btn active" onclick="setMode('local')" id="localBtn">
-                🏠 Local Testing
-            </button>
-            <button class="mode-btn" onclick="setMode('aws')" id="awsBtn">
-                ☁️ AWS API
-            </button>
-        </div>
-
-        <!-- API Endpoint Config (Hidden) -->
-        <div class="input-section" id="apiConfig" style="display: none;">
-            <label>API Endpoint:</label>
-            <input type="text" id="apiEndpoint" value="https://r0unfakca4.execute-api.us-west-2.amazonaws.com/dev">
-        </div>
-
-        <!-- Tab Navigation -->
-        <div class="tab-nav">
-            <button class="tab-btn active" onclick="switchTab('analyze')">
-                🔍 Analyze Text
-            </button>
-            <button class="tab-btn" onclick="switchTab('batch')">
-                📊 Batch Process
-            </button>
-            <button class="tab-btn" onclick="switchTab('history')">
-                📜 History
-            </button>
-        </div>
-
-        <!-- Tab 1: Analyze Text -->
-        <div id="analyzeTab" class="tab-content active">
-            <div class="input-section">
-                <label for="textInput">Enter your text:</label>
-                <textarea id="textInput"
-                    placeholder="Type or paste your text here...">I absolutely love this product! The quality is outstanding!</textarea>
+    <div class="app-shell">
+        <aside class="sidebar ui-panel ui-panel--shadow">
+            <div class="brand">
+                <p class="ui-kicker">Sentiment analysis interface</p>
+                <h2>Sentiment Analysis Platform</h2>
+                <p class="ui-copy">Small operational frontend for direct analysis, batch submission, and history review.</p>
             </div>
 
-            <div class="input-section">
-                <label for="userId">User ID (optional):</label>
-                <input type="text" id="userId" placeholder="user123" value="web-user">
-            </div>
+            <section class="sidebar-block" aria-labelledby="modeHeading">
+                <p class="ui-kicker" id="modeHeading">Environment</p>
+                <div class="mode-selector" role="group" aria-label="Environment mode">
+                    <button class="mode-btn ui-button ui-button--nav active" onclick="setMode('local')" id="localBtn" type="button">
+                        Local testing
+                    </button>
+                    <button class="mode-btn ui-button ui-button--nav" onclick="setMode('aws')" id="awsBtn" type="button">
+                        AWS API
+                    </button>
+                </div>
+                <div class="mode-note ui-panel ui-panel--muted">
+                    <p class="ui-label">Mode</p>
+                    <p class="ui-copy" id="modeDescription">Local uses the development server. AWS uses the deployed API endpoint.</p>
+                </div>
+            </section>
 
-            <div class="button-group">
-                <button class="primary-btn" onclick="analyzeSentiment()" id="analyzeBtn">
-                    🔍 Analyze Sentiment
-                </button>
-                <button class="secondary-btn" onclick="clearAnalyze()">
-                    🗑️ Clear
-                </button>
-            </div>
+        </aside>
 
-            <div class="loading" id="analyzeLoading">
-                <div class="spinner"></div>
-                <p>Analyzing sentiment...</p>
-            </div>
+        <main class="workspace ui-panel ui-panel--shadow">
+            <header class="workspace-header ui-section-header">
+                <div>
+                    <p class="ui-kicker" id="navHeading">Sections</p>
+                </div>
+                <div class="tab-nav" role="tablist" aria-label="Workflow sections">
+                    <button class="tab-btn ui-button ui-button--nav active" id="analyzeTabButton" onclick="switchTab('analyze', this)" type="button" role="tab" aria-controls="analyzeTab" aria-selected="true">
+                        Analyze text
+                    </button>
+                    <button class="tab-btn ui-button ui-button--nav" id="batchTabButton" onclick="switchTab('batch', this)" type="button" role="tab" aria-controls="batchTab" aria-selected="false">
+                        Batch process
+                    </button>
+                    <button class="tab-btn ui-button ui-button--nav" id="historyTabButton" onclick="switchTab('history', this)" type="button" role="tab" aria-controls="historyTab" aria-selected="false">
+                        History
+                    </button>
+                </div>
+            </header>
 
-            <div class="result-card" id="analyzeResult"></div>
-            <div class="error-card" id="analyzeError"></div>
-        </div>
+            <section id="analyzeTab" class="tab-content active panel" role="tabpanel" aria-labelledby="analyzeTabButton">
+                <div class="panel-header ui-section-header">
+                    <p class="ui-kicker">Analyze</p>
+                    <h4>Single text inference</h4>
+                    <p class="section-summary ui-copy">Submit one text input and inspect sentiment, confidence, and request context.</p>
+                </div>
 
-        <!-- Tab 2: Batch Process -->
-        <div id="batchTab" class="tab-content">
-            <div class="info-box">
-                <strong>📊 Batch Processing</strong><br>
-                Process multiple texts at once. In AWS mode, upload a CSV file to S3. In local mode, test with sample
-                data.
-            </div>
+                <div class="panel-layout">
+                    <div class="panel-main">
+                        <div class="input-section ui-field">
+                            <label class="ui-label" for="textInput">Text</label>
+                            <textarea class="ui-textarea" id="textInput" placeholder="Type or paste your text here...">I absolutely love this product! The quality is outstanding!</textarea>
+                        </div>
 
-            <div class="input-section">
-                <label for="batchUserId">User ID:</label>
-                <input type="text" id="batchUserId" placeholder="batch-user" value="batch-user">
-            </div>
+                        <div class="button-group">
+                            <button class="action-btn ui-button ui-button--solid" onclick="analyzeSentiment()" id="analyzeBtn" type="button">
+                                Run analysis
+                            </button>
+                            <button class="action-btn ui-button ui-button--muted" onclick="clearAnalyze()" type="button">
+                                Clear fields
+                            </button>
+                        </div>
+                    </div>
 
-            <div class="input-section">
-                <label>Sample Texts (Local Mode):</label>
-                <textarea id="batchTexts" placeholder="Enter texts, one per line">I love this product!
+                    <div class="panel-side">
+                        <div class="input-section ui-field">
+                            <label class="ui-label" for="userId">User ID</label>
+                            <input class="ui-input" type="text" id="userId" placeholder="user123" value="web-user">
+                            <p class="help-text ui-copy">Optional identifier stored with the request.</p>
+                        </div>
+
+                        <div class="status-panel ui-panel ui-panel--muted">
+                            <p class="ui-label">Input rules</p>
+                            <p class="help-text ui-copy">Use plain text only. Press Control or Command plus Enter to submit quickly.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loading" id="analyzeLoading">
+                    <div class="loading-note ui-panel ui-panel--muted">Running sentiment analysis.</div>
+                </div>
+
+                <div class="result-card ui-panel" id="analyzeResult"></div>
+                <div class="error-card ui-panel" id="analyzeError"></div>
+            </section>
+
+            <section id="batchTab" class="tab-content panel" role="tabpanel" aria-labelledby="batchTabButton">
+                <div class="panel-header ui-section-header">
+                    <p class="ui-kicker">Batch</p>
+                    <h4>Grouped submission</h4>
+                    <p class="section-summary ui-copy">Submit multiple texts in one request. Local mode uses sample text rows. AWS mode accepts CSV upload.</p>
+                </div>
+
+                <div class="panel-layout">
+                    <div class="panel-main">
+                        <div class="input-section ui-field">
+                            <label class="ui-label" for="batchTexts">Sample texts</label>
+                            <textarea class="ui-textarea" id="batchTexts" placeholder="Enter texts, one per line">I love this product!
 This is terrible quality
 Pretty good overall
 Amazing experience!</textarea>
-                <p class="help-text">Enter multiple texts, one per line</p>
-            </div>
+                            <p class="help-text ui-copy">Enter one text per line for local execution.</p>
+                        </div>
 
-            <div class="input-section" id="csvUpload" style="display: none;">
-                <label for="csvFile">Or upload CSV file (AWS Mode):</label>
-                <input type="file" id="csvFile" accept=".csv">
-                <p class="help-text">CSV format: text,user_id</p>
-            </div>
+                        <div class="input-section ui-field hide" id="csvUpload">
+                            <label class="ui-label" for="csvFile">CSV file</label>
+                            <input class="ui-file" type="file" id="csvFile" accept=".csv">
+                            <p class="help-text ui-copy">Expected format: text,user_id</p>
+                        </div>
 
-            <div class="button-group">
-                <button class="primary-btn" onclick="processBatch()" id="batchBtn">
-                    📊 Process Batch
-                </button>
-                <button class="secondary-btn" onclick="clearBatch()">
-                    🗑️ Clear
-                </button>
-            </div>
+                        <div class="button-group">
+                            <button class="action-btn ui-button ui-button--solid" onclick="processBatch()" id="batchBtn" type="button">
+                                Submit batch
+                            </button>
+                            <button class="action-btn ui-button ui-button--muted" onclick="clearBatch()" type="button">
+                                Clear fields
+                            </button>
+                        </div>
+                    </div>
 
-            <div class="loading" id="batchLoading">
-                <div class="spinner"></div>
-                <p>Processing batch...</p>
-            </div>
+                    <div class="panel-side">
+                        <div class="input-section ui-field">
+                            <label class="ui-label" for="batchUserId">User ID</label>
+                            <input class="ui-input" type="text" id="batchUserId" placeholder="batch-user" value="batch-user">
+                        </div>
 
-            <div class="result-card" id="batchResult"></div>
-            <div class="error-card" id="batchError"></div>
-        </div>
+                        <div class="status-panel stack ui-panel ui-panel--muted">
+                            <div>
+                                <p class="ui-label">Execution</p>
+                                <p class="help-text ui-copy">Local mode returns direct results. AWS mode returns batch status and stores results for history lookup.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        <!-- Tab 3: History -->
-        <div id="historyTab" class="tab-content">
-            <div class="info-box">
-                <strong>📜 History</strong><br>
-                View past sentiment analysis results. Search by user ID or batch ID.
-            </div>
+                <div class="loading" id="batchLoading">
+                    <div class="loading-note ui-panel ui-panel--muted">Submitting batch job.</div>
+                </div>
 
-            <div class="input-section">
-                <label for="historyUserId">User ID:</label>
-                <input type="text" id="historyUserId" placeholder="user123" value="web-user">
-            </div>
+                <div class="result-card ui-panel" id="batchResult"></div>
+                <div class="error-card ui-panel" id="batchError"></div>
+            </section>
 
-            <div class="input-section">
-                <label for="historyLimit">Number of results:</label>
-                <input type="text" id="historyLimit" placeholder="10" value="10">
-            </div>
+            <section id="historyTab" class="tab-content panel" role="tabpanel" aria-labelledby="historyTabButton">
+                <div class="panel-header ui-section-header">
+                    <p class="ui-kicker">History</p>
+                    <h4>Stored results</h4>
+                    <p class="section-summary ui-copy">Search persisted inference results by user ID or inspect a submitted batch by batch ID.</p>
+                </div>
 
-            <div class="button-group">
-                <button class="primary-btn" onclick="getHistory()" id="historyBtn">
-                    📜 Get History
-                </button>
-                <button class="secondary-btn" onclick="clearHistory()">
-                    🗑️ Clear
-                </button>
-            </div>
+                <div class="panel-layout">
+                    <div class="panel-main">
+                        <div class="button-group">
+                            <button class="action-btn ui-button ui-button--solid" onclick="getHistory()" id="historyBtn" type="button">
+                                Load history
+                            </button>
+                            <button class="action-btn ui-button ui-button--muted" onclick="clearHistory()" type="button">
+                                Reset view
+                            </button>
+                        </div>
 
-            <div class="loading" id="historyLoading">
-                <div class="spinner"></div>
-                <p>Loading history...</p>
-            </div>
+                        <div id="historyResults"></div>
+                    </div>
 
-            <div id="historyResults"></div>
-            <div class="error-card" id="historyError"></div>
-        </div>
+                    <div class="panel-side">
+                        <div class="input-section ui-field">
+                            <label class="ui-label" for="historyUserId">User ID</label>
+                            <input class="ui-input" type="text" id="historyUserId" placeholder="user123" value="web-user">
+                        </div>
+
+                        <div class="input-section ui-field">
+                            <label class="ui-label" for="historyLimit">Result limit</label>
+                            <input class="ui-input" type="text" id="historyLimit" placeholder="10" value="10">
+                        </div>
+
+                        <div class="status-panel ui-panel ui-panel--muted">
+                            <p class="ui-label">Search mode</p>
+                            <p class="help-text ui-copy">User ID search applies the limit. Batch history lookup is triggered from batch results.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loading" id="historyLoading">
+                    <div class="loading-note ui-panel ui-panel--muted">Loading stored results.</div>
+                </div>
+
+                <div class="error-card ui-panel" id="historyError"></div>
+            </section>
+        </main>
     </div>
 
+    <script src="./config.js"></script>
     <script>
-        // Application state
         let currentMode = 'local';
         const LOCAL_API = 'http://localhost:5000';
 
-        // Auto-detect environment
-        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-            document.getElementById('localBtn').style.display = 'none';
-            // Auto-switch to AWS mode
-            setTimeout(() => setMode('aws'), 100);
+        function resolveRuntimeProfile() {
+            const params = new URLSearchParams(window.location.search);
+            const profileFromQuery = params.get('profile');
+            const runtimeConfig = window.RUNTIME_CONFIG || window.__APP_CONFIG__ || {};
+            const profileFromRuntime =
+                runtimeConfig.profile ||
+                runtimeConfig.env ||
+                runtimeConfig.environment ||
+                window.APP_PROFILE ||
+                window.ENV_PROFILE;
+
+            return (profileFromQuery || profileFromRuntime || '').toString().trim().toLowerCase();
         }
 
-        // Switch between tabs
-        function switchTab(tabName) {
-            // Update tab buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
+        function isProdProfile(profile) {
+            return ['prod', 'production', 'live'].includes(profile);
+        }
 
-            // Update tab content
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        function switchTab(tabName, trigger) {
+            document.querySelectorAll('.tab-btn').forEach((btn) => {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-selected', 'false');
+            });
+
+            document.querySelectorAll('.tab-content').forEach((content) => content.classList.remove('active'));
+
+            const activeButton = trigger || document.getElementById(tabName + 'TabButton');
+            activeButton.classList.add('active');
+            activeButton.setAttribute('aria-selected', 'true');
             document.getElementById(tabName + 'Tab').classList.add('active');
 
-            // Clear results
             clearResults(tabName);
         }
 
-        // Set mode (local or AWS)
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('localBtn').classList.toggle('active', mode === 'local');
             document.getElementById('awsBtn').classList.toggle('active', mode === 'aws');
-            // document.getElementById('apiConfig').style.display = mode === 'aws' ? 'block' : 'none'; // Keep hidden
-            document.getElementById('csvUpload').style.display = mode === 'aws' ? 'block' : 'none';
+            document.getElementById('csvUpload').classList.toggle('hide', mode !== 'aws');
+            document.getElementById('modeDescription').textContent = mode === 'local'
+                ? 'Local uses the development server.'
+                : 'AWS uses API_BASE_URL from config.js and enables CSV batch upload.';
         }
 
-        // Get API base URL
+        function initializeMode() {
+            const profile = resolveRuntimeProfile();
+            const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const forceAwsByHost = !isLocalHost;
+            const forceAwsByProfile = isProdProfile(profile);
+
+            if (forceAwsByHost) {
+                document.getElementById('localBtn').style.display = 'none';
+            }
+
+            setMode(forceAwsByHost || forceAwsByProfile ? 'aws' : 'local');
+        }
+
         function getApiUrl() {
             if (currentMode === 'local') {
                 return LOCAL_API;
-            } else {
-                const endpoint = document.getElementById('apiEndpoint').value.trim();
-                if (!endpoint) {
-                    throw new Error('Please enter your AWS API endpoint');
-                }
-                return endpoint;
             }
+
+            const endpoint = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL ? window.APP_CONFIG.API_BASE_URL : '').trim();
+            if (!endpoint) {
+                throw new Error('Missing API_BASE_URL in config.js');
+            }
+
+            return endpoint;
         }
 
-        // ========== ANALYZE SENTIMENT ==========
         async function analyzeSentiment() {
             const text = document.getElementById('textInput').value.trim();
             const userId = document.getElementById('userId').value.trim() || 'anonymous';
@@ -627,31 +317,34 @@ Amazing experience!</textarea>
             const resultCard = document.getElementById('analyzeResult');
             const sentiment = data.sentiment.toUpperCase();
             const confidence = (data.confidence * 100).toFixed(1);
+            const accentClass = sentiment === 'POSITIVE' ? 'positive' : sentiment === 'NEGATIVE' ? 'negative' : 'neutral';
 
-            const emoji = sentiment === 'POSITIVE' ? '😊' : sentiment === 'NEGATIVE' ? '😞' : '😐';
-            const color = sentiment === 'POSITIVE' ? '#28a745' : sentiment === 'NEGATIVE' ? '#dc3545' : '#ffc107';
-            const bgClass = sentiment === 'POSITIVE' ? 'positive' : sentiment === 'NEGATIVE' ? 'negative' : 'neutral';
-
-            resultCard.className = `result-card show ${bgClass}`;
+            resultCard.className = `result-card ui-panel show ui-panel--${accentClass}`;
             resultCard.innerHTML = `
                 <div class="result-header">
-                    <span class="emoji">${emoji}</span>
-                    <div>
-                        <div class="sentiment-text" style="color: ${color}">${sentiment}</div>
-                        <div style="color: #666; font-size: 0.9em; margin-top: 5px;">
-                            ${data.text_preview || data.text.substring(0, 100)}
-                        </div>
+                    <p class="result-type">Inference result</p>
+                    <div class="sentiment-text">${sentiment}</div>
+                    <p class="result-preview">${data.text_preview || data.text.substring(0, 120)}</p>
+                </div>
+                <div class="result-metrics">
+                    <div class="metric-block ui-panel ui-panel--muted">
+                        <span class="ui-meta-label">Confidence</span>
+                        <div class="metric-value">${confidence}%</div>
+                    </div>
+                    <div class="metric-block ui-panel ui-panel--muted">
+                        <span class="ui-meta-label">Model</span>
+                        <div class="metric-value">${data.model_version || 'current'}</div>
                     </div>
                 </div>
-                <div>
-                    <strong>Confidence:</strong>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${confidence}%">${confidence}%</div>
+                <div class="result-meta-grid">
+                    <div class="result-meta-item ui-panel ui-panel--muted">
+                        <span class="ui-meta-label">User</span>
+                        <span class="result-meta">${data.user_id || 'anonymous'}</span>
                     </div>
-                </div>
-                <div style="margin-top: 15px; font-size: 0.9em; color: #666;">
-                    <strong>User:</strong> ${data.user_id || 'anonymous'}<br>
-                    <strong>Timestamp:</strong> ${new Date().toLocaleString()}
+                    <div class="result-meta-item ui-panel ui-panel--muted">
+                        <span class="ui-meta-label">Timestamp</span>
+                        <span class="result-meta">${new Date().toLocaleString()}</span>
+                    </div>
                 </div>
             `;
         }
@@ -661,34 +354,32 @@ Amazing experience!</textarea>
             hideResults('analyze');
         }
 
-        // ========== BATCH PROCESSING ==========
         async function processBatch() {
             const userId = document.getElementById('batchUserId').value.trim() || 'batch-user';
             let texts = [];
 
-            // Get texts from Textarea or File
             if (currentMode === 'aws' && document.getElementById('csvFile').files.length > 0) {
                 const file = document.getElementById('csvFile').files[0];
                 try {
                     const content = await readFile(file);
-                    // Simple CSV parser: assumes header row, takes first column
-                    const lines = content.split('\n').map(l => l.trim()).filter(l => l);
-                    // Remove header if it looks like "text,..."
-                    if (lines[0].toLowerCase().startsWith('text')) lines.shift();
+                    const lines = content.split('\n').map((line) => line.trim()).filter((line) => line);
 
-                    texts = lines.map(line => {
-                        // Handle simple quotes: "text",id
+                    if (lines[0].toLowerCase().startsWith('text')) {
+                        lines.shift();
+                    }
+
+                    texts = lines.map((line) => {
                         if (line.startsWith('"')) {
                             return line.split('",')[0].substring(1);
                         }
                         return line.split(',')[0];
                     });
-                } catch (e) {
-                    showError('batchError', 'Error reading file: ' + e.message);
+                } catch (error) {
+                    showError('batchError', 'Error reading file: ' + error.message);
                     return;
                 }
             } else {
-                texts = document.getElementById('batchTexts').value.trim().split('\n').filter(t => t.trim());
+                texts = document.getElementById('batchTexts').value.trim().split('\n').filter((text) => text.trim());
             }
 
             if (texts.length === 0) {
@@ -701,8 +392,6 @@ Amazing experience!</textarea>
 
             try {
                 const apiUrl = getApiUrl();
-
-                // Call Batch Endpoint (Unified for Local and AWS)
                 const response = await fetch(`${apiUrl}/batch`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -719,35 +408,38 @@ Amazing experience!</textarea>
 
                 const data = await response.json();
 
-                // Normalize result format if needed (Local server returns 'results', Lambda returns 'message' + saved to DB)
-                // Wait, Lambda handler returns { batch_id, total_rows, ... } but NOT the full results list if async?
-                // Actually Lambda returns:
-                // 'body': json.dumps({ 'batch_id': ..., 'status': 'COMPLETED', ... })
-                // It does NOT return the list of sentiment results in the response body mostly (check batch_handler.py).
-                // batch_handler.py DOES NOT return 'results' key in the final response!
-                // It saves to DynamoDB.
-
-                // So if we are in AWS mode, we might need to poll or just show "Batch Submitted".
-                // Local Server DOES return 'results'.
-
                 if (data.results) {
                     displayBatchResult(data.results);
                 } else {
-                    // AWS (Async/Stored) flow: Show success message and link to history
-                    document.getElementById('batchResult').innerHTML = `
-                        <div style="text-align: center; padding: 20px;">
-                            <h3 style="color: #28a745; margin-bottom: 10px;">✅ Batch Processed Successfully!</h3>
-                            <p>Batch ID: <strong>${data.batch_id}</strong></p>
-                            <p>Processed: ${data.total_rows} items</p>
-                            <p>Success: ${data.success_count} | Failed: ${data.failed_count}</p>
-                            <button class="mode-btn active" style="margin-top: 15px;" onclick="viewBatchHistory('${data.batch_id}')">
-                                📜 View Results in History
+                    const resultCard = document.getElementById('batchResult');
+                    resultCard.className = 'result-card ui-panel show ui-panel--positive';
+                    resultCard.innerHTML = `
+                        <div class="result-header">
+                            <p class="result-type">Batch status</p>
+                            <div class="sentiment-text">Completed</div>
+                            <p class="result-preview">The batch was accepted and results were stored for history lookup.</p>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-card ui-panel ui-panel--muted">
+                                <span class="ui-meta-label">Batch ID</span>
+                                <div class="stat-value">${data.batch_id}</div>
+                            </div>
+                            <div class="stat-card ui-panel ui-panel--muted">
+                                <span class="ui-meta-label">Processed</span>
+                                <div class="stat-value">${data.total_rows}</div>
+                            </div>
+                            <div class="stat-card ui-panel ui-panel--muted">
+                                <span class="ui-meta-label">Success / Failed</span>
+                                <div class="stat-value">${data.success_count}/${data.failed_count}</div>
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <button class="action-btn ui-button ui-button--solid" type="button" onclick="viewBatchHistory('${data.batch_id}')">
+                                View stored results
                             </button>
                         </div>
                     `;
-                    document.getElementById('batchResult').className = 'result-card show';
                 }
-
             } catch (error) {
                 showError('batchError', error.message);
             } finally {
@@ -758,74 +450,77 @@ Amazing experience!</textarea>
         function readFile(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(e);
+                reader.onload = (event) => resolve(event.target.result);
+                reader.onerror = (event) => reject(event);
                 reader.readAsText(file);
             });
         }
 
         function viewBatchHistory(batchId) {
             switchTab('history');
-            document.getElementById('historyUserId').value = ''; // specific batch doesn't need user id
-            // We need to support searching by batch_id in UI or just params
-            // Hack for now: trigger search specific to batch
+            document.getElementById('historyUserId').value = '';
             getHistory(batchId);
         }
 
         function displayBatchResult(results) {
             const resultCard = document.getElementById('batchResult');
-            const successCount = results.filter(r => r.status === 'success').length;
+            const successCount = results.filter((result) => result.status === 'success').length;
             const failedCount = results.length - successCount;
 
             let html = `
-                <h3 style="margin-bottom: 15px;">📊 Batch Processing Results</h3>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
-                    <div style="background: white; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #667eea;">${results.length}</div>
-                        <div style="color: #666;">Total</div>
+                <div class="result-header">
+                    <p class="result-type">Batch summary</p>
+                    <div class="sentiment-text">${results.length} rows</div>
+                    <p class="result-preview">Local execution returned per-row sentiment results.</p>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card ui-panel ui-panel--muted">
+                        <span class="ui-meta-label">Total</span>
+                        <div class="stat-value">${results.length}</div>
                     </div>
-                    <div style="background: white; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #28a745;">${successCount}</div>
-                        <div style="color: #666;">Success</div>
+                    <div class="stat-card ui-panel ui-panel--muted">
+                        <span class="ui-meta-label">Success</span>
+                        <div class="stat-value">${successCount}</div>
                     </div>
-                    <div style="background: white; padding: 15px; border-radius: 10px; text-align: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: #dc3545;">${failedCount}</div>
-                        <div style="color: #666;">Failed</div>
+                    <div class="stat-card ui-panel ui-panel--muted">
+                        <span class="ui-meta-label">Failed</span>
+                        <div class="stat-value">${failedCount}</div>
                     </div>
                 </div>
-                <h4 style="margin-top: 20px; margin-bottom: 10px;">Results:</h4>
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Text</th>
-                            <th>Sentiment</th>
-                            <th>Confidence</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="table-wrap">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Text</th>
+                                <th>Sentiment</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             `;
 
             results.forEach((result, index) => {
-                const sentimentClass = result.sentiment === 'POSITIVE' ? 'positive' : 'negative';
+                const sentimentClass = result.sentiment === 'POSITIVE' ? 'positive' : result.sentiment === 'NEGATIVE' ? 'negative' : 'neutral';
                 const confidence = result.confidence ? (result.confidence * 100).toFixed(1) + '%' : 'N/A';
 
                 html += `
                     <tr>
                         <td>${index + 1}</td>
-                        <td>${result.text.substring(0, 50)}${result.text.length > 50 ? '...' : ''}</td>
-                        <td><span class="sentiment-badge ${sentimentClass}">${result.sentiment || 'FAILED'}</span></td>
+                        <td>${result.text.substring(0, 70)}${result.text.length > 70 ? '...' : ''}</td>
+                        <td><span class="sentiment-badge ui-badge ui-badge--${sentimentClass}">${result.sentiment || 'FAILED'}</span></td>
                         <td>${confidence}</td>
                     </tr>
                 `;
             });
 
             html += `
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
             `;
 
-            resultCard.className = 'result-card show';
+            resultCard.className = 'result-card ui-panel show';
             resultCard.innerHTML = html;
         }
 
@@ -834,14 +529,11 @@ Amazing experience!</textarea>
             hideResults('batch');
         }
 
-        // ========== HISTORY ==========
         async function getHistory(batchIdOverride) {
             const userId = document.getElementById('historyUserId').value.trim();
-            const limit = parseInt(document.getElementById('historyLimit').value) || 10;
+            const limit = parseInt(document.getElementById('historyLimit').value, 10) || 10;
 
             let queryParams = '';
-
-            // Check if batchIdOverride is a string (event object check)
             if (batchIdOverride && typeof batchIdOverride === 'string') {
                 queryParams = `batch_id=${batchIdOverride}`;
             } else if (userId) {
@@ -866,7 +558,7 @@ Amazing experience!</textarea>
                 const data = await response.json();
                 displayHistory(data);
             } catch (error) {
-                showError('historyError', error.message + '\n\nNote: History requires data to be saved in DynamoDB. Try analyzing some texts first!');
+                showError('historyError', error.message + '\n\nNote: History requires stored DynamoDB records. Run inference first.');
             } finally {
                 showLoading('historyLoading', false);
             }
@@ -876,56 +568,61 @@ Amazing experience!</textarea>
             const container = document.getElementById('historyResults');
 
             if (!data.history || data.history.length === 0) {
-                container.innerHTML = `
-                    <div class="info-box">
-                        No history found for this user. Try analyzing some texts first!
-                    </div>
-                `;
+                container.innerHTML = '<div class="empty-state ui-panel ui-panel--muted">No history found for this query.</div>';
                 return;
             }
 
             let html = `
-                <h3 style="margin-top: 20px; margin-bottom: 15px;">📜 History for ${data.user_id}</h3>
-                <p style="color: #666; margin-bottom: 15px;">Total results: ${data.count || data.history.length}</p>
-                <table class="history-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Text</th>
-                            <th>Sentiment</th>
-                            <th>Confidence</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="stack">
+                    <div>
+                        <p class="ui-kicker">History results</p>
+                        <p class="table-summary ui-copy">Total results: ${data.count || data.history.length}</p>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Text</th>
+                                    <th>Sentiment</th>
+                                    <th>Confidence</th>
+                                </tr>
+                            </thead>
+                            <tbody>
             `;
 
-            data.history.forEach(item => {
-                let textDisplay = item.text.substring(0, 50) + (item.text.length > 50 ? '...' : '');
+            data.history.forEach((item) => {
+                let textDisplay = item.text.substring(0, 70) + (item.text.length > 70 ? '...' : '');
                 let sentimentClass = item.sentiment === 'POSITIVE' ? 'positive' : item.sentiment === 'NEGATIVE' ? 'negative' : 'neutral';
                 let confidence = (item.confidence * 100).toFixed(1) + '%';
 
                 if (item.type === 'BATCH') {
-                    textDisplay = `<strong>📊 ${item.text}</strong><br><span style="font-size:0.8em">${item.summary}</span>`;
+                    textDisplay = `<strong>${item.text}</strong><br><span class="help-text ui-copy">${item.summary}</span>`;
                     sentimentClass = item.sentiment === 'COMPLETED' ? 'positive' : 'neutral';
                     confidence = '-';
                 }
 
-                const date = item.created_at ? new Date(item.created_at).toLocaleString() :
-                    item.timestamp ? new Date(item.timestamp * 1000).toLocaleString() : 'N/A';
+                const date = item.created_at
+                    ? new Date(item.created_at).toLocaleString()
+                    : item.timestamp
+                        ? new Date(item.timestamp * 1000).toLocaleString()
+                        : 'N/A';
 
                 html += `
                     <tr>
-                        <td style="white-space: nowrap;">${date}</td>
+                        <td>${date}</td>
                         <td>${textDisplay}</td>
-                        <td><span class="sentiment-badge ${sentimentClass}">${item.sentiment}</span></td>
+                        <td><span class="sentiment-badge ui-badge ui-badge--${sentimentClass}">${item.sentiment}</span></td>
                         <td>${confidence}</td>
                     </tr>
                 `;
             });
 
             html += `
-                    </tbody>
-                </table>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             `;
 
             container.innerHTML = html;
@@ -937,14 +634,8 @@ Amazing experience!</textarea>
             hideError('historyError');
         }
 
-        // ========== UTILITY FUNCTIONS ==========
         function showLoading(elementId, show) {
-            const element = document.getElementById(elementId);
-            if (show) {
-                element.classList.add('show');
-            } else {
-                element.classList.remove('show');
-            }
+            document.getElementById(elementId).classList.toggle('show', show);
         }
 
         function showError(elementId, message) {
@@ -961,8 +652,15 @@ Amazing experience!</textarea>
             const resultId = tab + 'Result';
             const errorId = tab + 'Error';
             const resultsId = tab === 'history' ? 'historyResults' : null;
+            const resultElement = document.getElementById(resultId);
 
-            document.getElementById(resultId)?.classList.remove('show');
+            if (resultElement) {
+                resultElement.className = 'result-card ui-panel';
+                if (tab !== 'history') {
+                    resultElement.innerHTML = '';
+                }
+            }
+
             hideError(errorId);
             if (resultsId) {
                 document.getElementById(resultsId).innerHTML = '';
@@ -971,26 +669,15 @@ Amazing experience!</textarea>
 
         function clearResults(tab) {
             hideResults(tab);
-            const loadingId = tab + 'Loading';
-            showLoading(loadingId, false);
+            showLoading(tab + 'Loading', false);
         }
 
-        // Load saved API endpoint
         window.addEventListener('load', () => {
-            const savedEndpoint = localStorage.getItem('apiEndpoint');
-            if (savedEndpoint) {
-                document.getElementById('apiEndpoint').value = savedEndpoint;
-            }
+            initializeMode();
         });
 
-        // Save API endpoint
-        document.getElementById('apiEndpoint').addEventListener('change', (e) => {
-            localStorage.setItem('apiEndpoint', e.target.value);
-        });
-
-        // Keyboard shortcut: Ctrl+Enter to analyze
-        document.getElementById('textInput').addEventListener('keydown', function (e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        document.getElementById('textInput').addEventListener('keydown', (event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
                 analyzeSentiment();
             }
         });

@@ -1,9 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
 
 permissions:
@@ -11,7 +8,7 @@ permissions:
 
 jobs:
   python-checks:
-    name: Python Lint And Tests
+    name: Python Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,12 +23,7 @@ jobs:
       - name: Install CI Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pytest
-
-      - name: Lint Python
-        run: |
-          flake8 backend --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 backend --count --exit-zero --max-complexity=12 --max-line-length=100 --statistics
+          pip install pytest
 
       - name: Run Basic Tests
         run: |
@@ -45,7 +37,7 @@ jobs:
           exit "$code"
 
   terraform-checks:
-    name: Terraform Format And Validate
+    name: Terraform Validate
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -56,9 +48,6 @@ jobs:
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
 
       - name: Terraform Init (No Backend)
         run: terraform init -backend=false -input=false

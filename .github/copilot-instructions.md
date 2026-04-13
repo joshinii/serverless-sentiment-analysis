@@ -40,3 +40,7 @@ Keep the product small and the infrastructure strong.
 - Prefer minimal, practical implementations.
 - Do not overengineer.
 - Explain tradeoffs briefly when suggesting changes.
+
+Keep the solution minimal.
+Do not introduce Kubernetes, Docker, MLflow, Step Functions, or complex release tooling.
+Use Terraform + GitHub Actions + generated frontend config only.

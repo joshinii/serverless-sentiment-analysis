@@ -21,6 +21,12 @@ variable "alert_email" {
   type        = string
 }
 
+variable "third_party_api_key" {
+  description = "Third-party API key stored in Secrets Manager"
+  type        = string
+  sensitive   = true
+}
+
 variable "batch_queue_visibility_timeout_seconds" {
   description = "Visibility timeout for the batch jobs queue; should exceed batch Lambda timeout"
   type        = number

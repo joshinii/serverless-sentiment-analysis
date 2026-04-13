@@ -13,6 +13,6 @@ resource "aws_secretsmanager_secret" "api_config" {
 resource "aws_secretsmanager_secret_version" "api_config_val" {
   secret_id = aws_secretsmanager_secret.api_config.id
   secret_string = jsonencode({
-    THIRD_PARTY_API_KEY = "dummy-secret-value-12345"
+    THIRD_PARTY_API_KEY = var.third_party_api_key
   })
 }

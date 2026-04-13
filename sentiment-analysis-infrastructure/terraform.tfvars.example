@@ -9,7 +9,7 @@ environment  = "dev"
 aws_region = "us-west-2"
 
 # Alert Email - Change this to your email!
-alert_email = "your-email@example.com"
+alert_email = "joshini.mn@gmail.com"
 
 # API Gateway throttling (stage-level)
 api_throttle_rate_limit  = 25
@@ -26,7 +26,6 @@ tags = {
   Project     = "SentimentAnalysis"
   Environment = "Development"
   ManagedBy   = "Terraform"
-  Owner       = "YourName"
+  Owner       = "Joshini"
   Course      = "CloudComputing"
-  Assignment  = "Assignment1"
 }

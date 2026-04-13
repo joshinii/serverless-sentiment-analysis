@@ -1,17 +1,105 @@
+from pathlib import Path
+import argparse
+import shutil
+import sys
+
 from optimum.onnxruntime import ORTModelForSequenceClassification
 from transformers import AutoTokenizer
-import os
 
-model_id = "distilbert-base-uncased-finetuned-sst-2-english"
-output_dir = "backend/model_assets"
+MODEL_ID = "distilbert-base-uncased-finetuned-sst-2-english"
+OUTPUT_DIR = Path("backend/model_assets")
 
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
+# Adjust this list if your runtime expects different names/files.
+REQUIRED_FILES = [
+    "config.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+]
 
-print(f"Exporting {model_id} to {output_dir}...")
-model = ORTModelForSequenceClassification.from_pretrained(model_id, export=True)
-tokenizer = AutoTokenizer.from_pretrained(model_id)
+# Accept either tokenizer.json or vocab.txt-based tokenizer assets.
+TOKENIZER_FILE_OPTIONS = [
+    ["tokenizer.json"],
+    ["vocab.txt"],
+]
 
-model.save_pretrained(output_dir)
-tokenizer.save_pretrained(output_dir)
-print("Export complete.")
+# Accept one or more ONNX naming patterns.
+MODEL_FILE_OPTIONS = [
+    ["model.onnx"],
+    ["onnx/model.onnx"],
+]
+
+
+def has_any_file_set(base: Path, options: list[list[str]]) -> bool:
+    for file_set in options:
+        if all((base / rel_path).exists() for rel_path in file_set):
+            return True
+    return False
+
+
+def validate_model_assets(output_dir: Path) -> tuple[bool, list[str]]:
+    missing = []
+
+    for rel_path in REQUIRED_FILES:
+        if not (output_dir / rel_path).exists():
+            missing.append(rel_path)
+
+    if not has_any_file_set(output_dir, TOKENIZER_FILE_OPTIONS):
+        missing.append("tokenizer.json or vocab.txt")
+
+    if not has_any_file_set(output_dir, MODEL_FILE_OPTIONS):
+        missing.append("model.onnx or onnx/model.onnx")
+
+    return len(missing) == 0, missing
+
+
+def export_model(model_id: str, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Exporting {model_id} to {output_dir}...")
+    model = ORTModelForSequenceClassification.from_pretrained(
+        model_id,
+        export=True,
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+    model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+    ok, missing = validate_model_assets(output_dir)
+    if not ok:
+        raise RuntimeError(
+            f"Export finished but model assets are incomplete. Missing: {', '.join(missing)}"
+        )
+
+    print("Export complete and validated.")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--force", action="store_true", help="Re-export even if assets already exist")
+    parser.add_argument("--clean", action="store_true", help="Delete output dir before export")
+    parser.add_argument("--model-id", default=MODEL_ID, help="Hugging Face model id")
+    args = parser.parse_args()
+
+    if OUTPUT_DIR.exists() and args.clean:
+        shutil.rmtree(OUTPUT_DIR)
+
+    if not args.force:
+        ok, missing = validate_model_assets(OUTPUT_DIR)
+        if ok:
+            print(f"Model assets already present in {OUTPUT_DIR}, skipping export.")
+            return 0
+        else:
+            print(f"Model assets missing or incomplete in {OUTPUT_DIR}: {', '.join(missing)}")
+            print("Attempting export...")
+
+    try:
+        export_model(args.model_id, OUTPUT_DIR)
+        return 0
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
