@@ -46,17 +46,37 @@ def main():
                 "sentiment_analyzer": {
                     "name": outputs["lambda_functions"]["value"]["sentiment_analyzer"],
                     "path": "backend/sentiment_analyzer",
-                    "handler": "lambda_function.py"
+                    "handler": "lambda_function.lambda_handler",
+                    "source_file": "lambda_function.py",
+                    "artifact": "function.zip"
                 },
                 "batch_processor": {
                     "name": outputs["lambda_functions"]["value"]["batch_processor"],
                     "path": "backend/batch_processor",
-                    "handler": "batch_handler.py"
+                    "handler": "batch_submitter.lambda_handler",
+                    "source_file": "batch_submitter.py",
+                    "artifact": "function.zip"
                 },
-                "history": {
+                "batch_worker": {
+                    "name": outputs["lambda_functions"]["value"]["batch_worker"],
+                    "path": "backend/batch_processor",
+                    "handler": "batch_worker.lambda_handler",
+                    "source_file": "batch_worker.py",
+                    "artifact": "function.zip"
+                },
+                "history_handler": {
                     "name": outputs["lambda_functions"]["value"]["history_handler"],
                     "path": "backend/history",
-                    "handler": "history_handler.py"
+                    "handler": "history_handler.lambda_handler",
+                    "source_file": "history_handler.py",
+                    "artifact": "function.zip"
+                },
+                "job_status_handler": {
+                    "name": outputs["lambda_functions"]["value"]["job_status_handler"],
+                    "path": "backend/history",
+                    "handler": "job_status_handler.lambda_handler",
+                    "source_file": "job_status_handler.py",
+                    "artifact": "function.zip"
                 }
             }
         }

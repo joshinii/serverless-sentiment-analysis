@@ -28,7 +28,9 @@ output "lambda_functions" {
   value = {
     sentiment_analyzer = aws_lambda_function.sentiment_analyzer.function_name
     batch_processor    = aws_lambda_function.batch_processor.function_name
+    batch_worker       = aws_lambda_function.batch_worker.function_name
     history_handler    = aws_lambda_function.history_handler.function_name
+    job_status_handler = aws_lambda_function.job_status_handler.function_name
   }
 }
 
