@@ -52,6 +52,23 @@ def validate_model_assets(output_dir: Path) -> tuple[bool, list[str]]:
     return len(missing) == 0, missing
 
 
+def print_validation(output_dir: Path) -> tuple[bool, list[str]]:
+    """Print a per-file validation report and return (ok, missing)."""
+    ok, missing = validate_model_assets(output_dir)
+
+    all_checks = [
+        *REQUIRED_FILES,
+        "tokenizer.json or vocab.txt",
+        "model.onnx or onnx/model.onnx",
+    ]
+    missing_set = set(missing)
+    for label in all_checks:
+        mark = "✓" if label not in missing_set else "✗"
+        print(f"  {mark}  {label}")
+
+    return ok, missing
+
+
 def export_model(model_id: str, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -75,11 +92,32 @@ def export_model(model_id: str, output_dir: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Export or validate the ONNX sentiment model.",
+        epilog=(
+            "Examples:\n"
+            "  python export_onnx.py              # export if assets missing\n"
+            "  python export_onnx.py --force      # always re-export\n"
+            "  python export_onnx.py --clean      # wipe and re-export\n"
+            "  python export_onnx.py --validate   # check assets, exit 1 if invalid"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--force", action="store_true", help="Re-export even if assets already exist")
     parser.add_argument("--clean", action="store_true", help="Delete output dir before export")
+    parser.add_argument("--validate", action="store_true", help="Validate assets only; do not export")
     parser.add_argument("--model-id", default=MODEL_ID, help="Hugging Face model id")
     args = parser.parse_args()
+
+    if args.validate:
+        print(f"Validating model assets in {OUTPUT_DIR}:")
+        ok, missing = print_validation(OUTPUT_DIR)
+        if ok:
+            print("Validation passed.")
+            return 0
+        print(f"\nValidation FAILED. Missing: {', '.join(missing)}", file=sys.stderr)
+        print("Run `python export_onnx.py` to prepare assets.", file=sys.stderr)
+        return 1
 
     if OUTPUT_DIR.exists() and args.clean:
         shutil.rmtree(OUTPUT_DIR)
@@ -95,6 +133,8 @@ def main() -> int:
 
     try:
         export_model(args.model_id, OUTPUT_DIR)
+        print(f"\nValidating exported assets in {OUTPUT_DIR}:")
+        print_validation(OUTPUT_DIR)
         return 0
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

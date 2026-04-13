@@ -62,6 +62,22 @@ data "archive_file" "history_lambda" {
   }
 }
 
+data "archive_file" "job_status_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_packages/job_status.zip"
+
+  source {
+    content  = <<-EOT
+      def lambda_handler(event, context):
+          return {
+              'statusCode': 200,
+              'body': '{"message": "Deploy actual code to replace this placeholder"}'
+          }
+    EOT
+    filename = "job_status_handler.py"
+  }
+}
+
 # Lambda: Sentiment Analyzer
 resource "aws_lambda_function" "sentiment_analyzer" {
   filename         = data.archive_file.sentiment_lambda.output_path
@@ -198,6 +214,36 @@ resource "aws_lambda_function" "history_handler" {
   )
 }
 
+# Lambda: Job Status Handler
+resource "aws_lambda_function" "job_status_handler" {
+  filename         = data.archive_file.job_status_lambda.output_path
+  function_name    = "${local.name_prefix}-job-status"
+  role             = aws_iam_role.job_status_lambda.arn
+  handler          = "job_status_handler.lambda_handler"
+  source_code_hash = data.archive_file.job_status_lambda.output_base64sha256
+  runtime          = "python3.11"
+  timeout          = 10
+  memory_size      = 256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.sentiment_analytics.name
+    }
+  }
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.private.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-job-status"
+    }
+  )
+}
+
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "sentiment_lambda" {
   name              = "/aws/lambda/${aws_lambda_function.sentiment_analyzer.function_name}"
@@ -223,6 +269,12 @@ resource "aws_cloudwatch_log_group" "history_lambda" {
   tags              = local.common_tags
 }
 
+resource "aws_cloudwatch_log_group" "job_status_lambda" {
+  name              = "/aws/lambda/${aws_lambda_function.job_status_handler.function_name}"
+  retention_in_days = 7
+  tags              = local.common_tags
+}
+
 # Lambda Permissions
 resource "aws_lambda_permission" "sentiment_api" {
   statement_id  = "AllowAPIGatewayInvoke"
@@ -244,6 +296,14 @@ resource "aws_lambda_permission" "history_api" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.history_handler.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*/*"
+}
+
+resource "aws_lambda_permission" "job_status_api" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.job_status_handler.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.main.execution_arn}/*/*/*"
 }

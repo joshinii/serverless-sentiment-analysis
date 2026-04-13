@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sentiment Analysis Platform</title>
     <link rel="stylesheet" href="./styles.css">
-    <script src="./config.js"></script>
 </head>
 
 <body>
@@ -228,6 +227,10 @@ Amazing experience!</textarea>
             return ['prod', 'production', 'live'].includes(profile);
         }
 
+        function isFileProtocol() {
+            return window.location.protocol === 'file:';
+        }
+
         function switchTab(tabName, trigger) {
             document.querySelectorAll('.tab-btn').forEach((btn) => {
                 btn.classList.remove('active');
@@ -249,15 +252,42 @@ Amazing experience!</textarea>
             document.getElementById('localBtn').classList.toggle('active', mode === 'local');
             document.getElementById('awsBtn').classList.toggle('active', mode === 'aws');
             document.getElementById('csvUpload').classList.toggle('hide', mode !== 'aws');
+            document.getElementById('apiConfig').classList.toggle('hide', mode !== 'aws');
             document.getElementById('modeDescription').textContent = mode === 'local'
-                ? 'Local uses the development server.'
+                ? 'Local uses the development server at localhost:5000.'
                 : 'AWS uses API_BASE_URL from config.js and enables CSV batch upload.';
         }
 
+        function showFileBanner() {
+            const banner = document.createElement('div');
+            banner.style.cssText = [
+                'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+                'background:#DC2626', 'color:#fff', 'font-family:monospace',
+                'font-size:0.85rem', 'font-weight:700', 'text-transform:uppercase',
+                'letter-spacing:0.06em', 'padding:12px 24px',
+                'border-bottom:2px solid #000'
+            ].join(';');
+            banner.textContent =
+                'FILE:// DETECTED — Serve from localhost instead: cd frontend && python3 -m http.server 8080';
+            document.body.prepend(banner);
+        }
+
         function initializeMode() {
+            if (isFileProtocol()) {
+                showFileBanner();
+                // Stay in local mode — do not switch to AWS
+                setMode('local');
+                return;
+            }
+
             const profile = resolveRuntimeProfile();
-            const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isLocalHost =
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
+
+            // Non-localhost host always means deployed environment
             const forceAwsByHost = !isLocalHost;
+            // Explicit prod profile overrides even on localhost (e.g. ?profile=prod testing)
             const forceAwsByProfile = isProdProfile(profile);
 
             if (forceAwsByHost) {

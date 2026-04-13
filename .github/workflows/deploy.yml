@@ -1,3 +1,24 @@
+# Deploy pipeline: runs on every push to main.
+# This is the PRIMARY supported deployment path — do not run deploy_all.py manually in production.
+#
+# Sequence:
+#   1. Export ONNX model (cached by model ID — skipped on cache hit)
+#   2. Validate model assets — fails fast if cache is corrupt or export failed
+#   3. Terraform init / plan / apply
+#   4. python update_config.py  → writes deploy_config.json from TF outputs
+#   5. python deploy_all.py     → packages each Lambda, uploads model assets,
+#                                  generates frontend/config.js, syncs S3, invalidates CF
+#   6. Smoke test /analyze
+#
+# Required GitHub secrets:
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+#   TF_STATE_BUCKET     – S3 bucket for terraform.tfstate (create once: aws s3api create-bucket)
+#   ALERT_EMAIL         – SNS alert recipient
+#   THIRD_PARTY_API_KEY – written to Secrets Manager; use any non-empty value if unused
+#
+# Optional repository variable:
+#   AWS_REGION          – defaults to us-west-2
+
 name: Deploy
 
 on:
@@ -14,15 +35,22 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy Infrastructure And Frontend
+    name: Deploy
     runs-on: ubuntu-latest
     env:
+      AWS_PAGER: ""
       AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
       TF_IN_AUTOMATION: "true"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
 
       - name: Set Up Terraform
         uses: hashicorp/setup-terraform@v3
@@ -34,19 +62,44 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Generate Terraform Variables File
+      # ── Model export ────────────────────────────────────────────────────────
+      # Cache keyed on model ID. A cache hit skips the ~5-min export download.
+      # Bump the suffix (…-v2, …-v3) to force a re-export when the model changes.
+      - name: Cache ONNX Model Assets
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: backend/model_assets
+          key: onnx-distilbert-base-uncased-finetuned-sst-2-english-v1
+
+      - name: Export ONNX Model
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: |
+          pip install -r requirements-export.txt
+          python export_onnx.py
+
+      - name: Validate Model Assets
+        run: python export_onnx.py --validate
+
+      # ── Infrastructure ──────────────────────────────────────────────────────
+      - name: Generate Terraform Variables
         working-directory: sentiment-analysis-infrastructure
         run: |
           cat > terraform.tfvars <<EOF
-          environment  = "dev"
-          aws_region   = "${{ env.AWS_REGION }}"
-          alert_email  = "${{ secrets.ALERT_EMAIL }}"
+          environment         = "dev"
+          aws_region          = "${{ env.AWS_REGION }}"
+          alert_email         = "${{ secrets.ALERT_EMAIL }}"
           third_party_api_key = "${{ secrets.THIRD_PARTY_API_KEY }}"
           EOF
 
       - name: Terraform Init
         working-directory: sentiment-analysis-infrastructure
-        run: terraform init -input=false
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=sentiment-analysis/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -input=false
 
       - name: Terraform Plan
         working-directory: sentiment-analysis-infrastructure
@@ -56,43 +109,36 @@ jobs:
         working-directory: sentiment-analysis-infrastructure
         run: terraform apply -input=false -auto-approve tfplan
 
-      - name: Read Terraform Outputs
-        id: tf_outputs
-        run: |
-          API_URL="$(terraform -chdir=sentiment-analysis-infrastructure output -raw api_endpoint)"
-          FRONTEND_BUCKET="$(terraform -chdir=sentiment-analysis-infrastructure output -raw frontend_bucket)"
-          echo "api_url=${API_URL}" >> "$GITHUB_OUTPUT"
-          echo "frontend_bucket=${FRONTEND_BUCKET}" >> "$GITHUB_OUTPUT"
+      # ── Application deploy ──────────────────────────────────────────────────
+      # update_config.py reads terraform output -json → deploy_config.json.
+      # deploy_all.py reads that file, then fails fast on any error:
+      #   - packages each Lambda (manylinux pip + zip + s3 upload + update-function-code)
+      #   - uploads backend/model_assets to the data bucket
+      #   - generates frontend/config.js with the live API URL
+      #   - syncs frontend/ to the S3 frontend bucket
+      #   - invalidates the CloudFront distribution
+      - name: Generate Deploy Config
+        run: python update_config.py
 
-      - name: Generate Frontend Config
-        run: |
-          cat > frontend/config.js <<EOF
-          // Generated by GitHub Actions deploy workflow.
-          window.APP_CONFIG = window.APP_CONFIG || {
-            API_BASE_URL: "${{ steps.tf_outputs.outputs.api_url }}"
-          };
-          EOF
+      - name: Package And Deploy App
+        run: python deploy_all.py
 
-      - name: Deploy Frontend Assets
-        run: aws s3 sync frontend/ "s3://${{ steps.tf_outputs.outputs.frontend_bucket }}/" --delete
-
-      - name: Post-Deploy Smoke Test
-        shell: bash
+      # ── Smoke test ──────────────────────────────────────────────────────────
+      - name: Smoke Test
         run: |
           set -euo pipefail
+          API_URL="$(terraform -chdir=sentiment-analysis-infrastructure output -raw api_endpoint)"
+          echo "Testing ${API_URL}/analyze"
 
-          API_URL="${{ steps.tf_outputs.outputs.api_url }}"
-          echo "Running smoke tests against: ${API_URL}"
-
-          analyze_code="$(curl -sS -o /tmp/analyze_response.json -w '%{http_code}' \
+          HTTP_CODE="$(curl -sS -o /tmp/smoke.json -w '%{http_code}' \
             -X POST "${API_URL}/analyze" \
-            -H 'Content-Type: application/json' \
-            -d '{"text":"CI smoke test: this service looks great","user_id":"ci-smoke"}')"
+            -H "Content-Type: application/json" \
+            -d '{"text":"smoke test - pipeline is healthy","user_id":"ci"}')"
 
-          if [ "${analyze_code}" != "200" ]; then
-            echo "Smoke test failed: /analyze returned HTTP ${analyze_code}"
-            cat /tmp/analyze_response.json
+          if [ "${HTTP_CODE}" != "200" ]; then
+            echo "FAILED — /analyze returned HTTP ${HTTP_CODE}"
+            cat /tmp/smoke.json
             exit 1
           fi
-
-          echo "Smoke test passed: /analyze is healthy."
+          echo "PASSED — /analyze returned 200"
+          cat /tmp/smoke.json

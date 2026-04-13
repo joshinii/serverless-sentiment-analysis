@@ -1,0 +1,8 @@
+# Dependencies for export_onnx.py
+# Install with: pip install -r requirements-export.txt
+#
+# Used by:
+#   - local dev:  python export_onnx.py
+#   - CI/deploy:  deploy.yml "Export ONNX Model" step
+optimum[onnxruntime]>=1.21.0
+transformers>=4.44.2

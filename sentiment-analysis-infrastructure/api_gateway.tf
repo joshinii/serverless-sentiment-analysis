@@ -218,6 +218,87 @@ resource "aws_api_gateway_integration_response" "history_options" {
 }
 
 # API Gateway Deployment
+# /jobs resource
+resource "aws_api_gateway_resource" "jobs" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_rest_api.main.root_resource_id
+  path_part   = "jobs"
+}
+
+# /jobs/{id} resource
+resource "aws_api_gateway_resource" "job_id" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_resource.jobs.id
+  path_part   = "{id}"
+}
+
+resource "aws_api_gateway_method" "job_status_get" {
+  rest_api_id      = aws_api_gateway_rest_api.main.id
+  resource_id      = aws_api_gateway_resource.job_id.id
+  http_method      = "GET"
+  authorization    = "NONE"
+  api_key_required = var.enable_api_key
+
+  request_parameters = {
+    "method.request.path.id" = true
+  }
+}
+
+resource "aws_api_gateway_integration" "job_status_lambda" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.job_id.id
+  http_method             = aws_api_gateway_method.job_status_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.job_status_handler.invoke_arn
+}
+
+# CORS for /jobs/{id}
+resource "aws_api_gateway_method" "job_status_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.job_id.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "job_status_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.job_id.id
+  http_method = aws_api_gateway_method.job_status_options.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "job_status_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.job_id.id
+  http_method = aws_api_gateway_method.job_status_options.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "job_status_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.job_id.id
+  http_method = aws_api_gateway_method.job_status_options.http_method
+  status_code = aws_api_gateway_method_response.job_status_options.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# API Gateway Deployment (below)
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
 
@@ -238,6 +319,12 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_integration.analyze_options.id,
       aws_api_gateway_integration.batch_options.id,
       aws_api_gateway_integration.history_options.id,
+      aws_api_gateway_resource.jobs.id,
+      aws_api_gateway_resource.job_id.id,
+      aws_api_gateway_method.job_status_get.id,
+      aws_api_gateway_method.job_status_options.id,
+      aws_api_gateway_integration.job_status_lambda.id,
+      aws_api_gateway_integration.job_status_options.id,
       var.api_throttle_rate_limit,
       var.api_throttle_burst_limit,
       var.enable_api_key,
@@ -253,7 +340,9 @@ resource "aws_api_gateway_deployment" "main" {
     aws_api_gateway_integration.history_lambda,
     aws_api_gateway_integration.analyze_options,
     aws_api_gateway_integration.batch_options,
-    aws_api_gateway_integration.history_options
+    aws_api_gateway_integration.history_options,
+    aws_api_gateway_integration.job_status_lambda,
+    aws_api_gateway_integration.job_status_options
   ]
 
   lifecycle {

@@ -73,6 +73,61 @@ resource "aws_iam_role_policy" "sentiment_lambda" {
   })
 }
 
+# Job Status Lambda Role
+resource "aws_iam_role" "job_status_lambda" {
+  name = "${local.name_prefix}-job-status-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "job_status_lambda" {
+  name = "${local.name_prefix}-job-status-lambda-policy"
+  role = aws_iam_role.job_status_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem"
+        ]
+        Resource = aws_dynamodb_table.sentiment_analytics.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.name_prefix}-job-status:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
 # Batch Submitter Lambda Role
 resource "aws_iam_role" "batch_submitter_lambda" {
   name = "${local.name_prefix}-batch-submitter-lambda-role"

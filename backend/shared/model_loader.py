@@ -50,14 +50,21 @@ def load_model_if_needed():
     tokenizer_file = os.path.join(config.MODEL_PATH, "tokenizer.json")
 
     if not os.path.exists(model_file) or not os.path.exists(tokenizer_file):
-        try:
+        if config.MODEL_BUCKET:
+            # Lambda context — download is required, no silent fallback allowed
             _download_model_from_s3()
-        except Exception as exc:
-            logger.warning("Model download failed; using fallback analyzer. error=%s", str(exc))
+        else:
+            # Local dev without S3 configured — fall back to keyword analyzer
+            logger.warning("Model assets not found and MODEL_BUCKET not set; using fallback analyzer")
             _use_fallback = True
             return
 
     if not os.path.exists(tokenizer_file) or not os.path.exists(model_file):
+        if config.MODEL_BUCKET:
+            raise RuntimeError(
+                f"Model assets still missing after S3 download attempt. "
+                f"Verify s3://{config.MODEL_BUCKET}/model_assets/ contains model.onnx and tokenizer.json."
+            )
         logger.warning("Model assets missing locally; using fallback analyzer")
         _use_fallback = True
         return
